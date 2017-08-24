@@ -49,18 +49,20 @@ for each example.
 import os
 import sys
 import random
+import warnings
 
+import cv2 as cv
 import numpy as np
 import tensorflow as tf
 
-from gdxray import get_images
+from gdxray_parser import get_images
 from dataset_utils import int64_feature, float_feature, bytes_feature
 
 # TFRecords convertion parameters.
 RANDOM_SEED = 4242
 SAMPLES_PER_FILES = 200
 
-DEFECT_LABEL = 0
+DEFECT_LABEL = 1
 DEFECT_LABEL_TEXT = "defect"
 
 
@@ -93,16 +95,21 @@ def _process_image(image):
         labels_text.append(DEFECT_LABEL_TEXT.encode('ascii'))
 
         box = image.boxes[row,:]
-        ymin = box[2]
-        xmin = box[1]
-        ymax = box[4]
-        xmax = box[3]
+        xmin = float(box[1]) / shape[1]
+        xmax = float(box[2]) / shape[1]
+        ymin = float(box[3]) / shape[0]
+        ymax = float(box[4]) / shape[0]
 
-        bboxes.append((float(ymin) / shape[0],
-                       float(xmin) / shape[1],
-                       float(ymax) / shape[0],
-                       float(xmax) / shape[1]
-                       ))
+        for test in [xmin,xmax,ymin,ymax]:
+          if test<0 or test>1:
+            warnings.warn("Box bounds must be between 0 and 1. Got %.4f"%test)
+
+        xmin = min(xmin,1)
+        xmax = min(xmax,1)
+        ymin = min(ymin,1)
+        ymax = min(ymax,1)
+
+        bboxes.append((ymin, xmin, ymax, xmax))
     return image_data, shape, bboxes, labels, labels_text
 
 
@@ -127,7 +134,7 @@ def _convert_to_example(image_data, labels, labels_text, bboxes, shape):
     for b in bboxes:
         assert len(b) == 4
         [l.append(point) for l, point in zip([ymin, xmin, ymax, xmax], b)]
-        
+
     image_format = b'PNG'
     example = tf.train.Example(features=tf.train.Features(feature={
             'image/height': int64_feature(shape[0]),
@@ -156,6 +163,20 @@ def _add_to_tfrecord(image, tfrecord_writer):
     image_data, shape, bboxes, labels, labels_text = _process_image(image)
     example = _convert_to_example(image_data, labels, labels_text, bboxes, shape)
     tfrecord_writer.write(example.SerializeToString())
+    _save_to_file(image, shape, bboxes)
+
+
+def _save_to_file(image, shape, bboxes):
+    """Save image to file with bounding boxes"""
+    pixels = image.pixels
+    filename = os.path.basename(image.filename)
+    for box in bboxes:
+        ymin = int(box[0] * shape[0])
+        xmin = int(box[1] * shape[1])
+        ymax = int(box[2] * shape[0])
+        xmax = int(box[3] * shape[1])
+        cv.rectangle(pixels, (xmin,ymin), (xmax,ymax), (0,0,255), 1)
+    cv.imwrite(os.path.join('pictures','test',filename), pixels)
 
 
 def _get_output_filename(output_dir, name, idx):
@@ -169,17 +190,17 @@ def run(output_dir, name='gdxray_train', shuffling=False):
       dataset_dir: The dataset directory where the dataset is stored.
       output_dir: Output directory.
     """
-    
+
     # Process dataset files.
-    for image in get_images():
-
-        # Open new TFRecord file.
-        tf_filename = _get_output_filename(output_dir, name, idx=0)
-        with tf.python_io.TFRecordWriter(tf_filename) as tfrecord_writer:
-
-            sys.stdout.write('\r>> Converting image %s \n'%image.filename)
-            sys.stdout.flush()
-            _add_to_tfrecord(image,tfrecord_writer)
+    tf_filename = _get_output_filename(output_dir, name, idx=0)
+    print("Writing file to", tf_filename)
+    i = 0
+    with tf.python_io.TFRecordWriter(tf_filename) as tfrecord_writer:
+      for image in get_images():
+        sys.stdout.write('\r>> Converting image [%i]: %s \n'%(i, image.filename))
+        sys.stdout.flush()
+        _add_to_tfrecord(image, tfrecord_writer)
+        i += 1
 
     print('\nFinished converting the GDXray Dataset!')
 

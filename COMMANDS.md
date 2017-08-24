@@ -1,4 +1,4 @@
-DATASET_DIR=/Users/maxkferg/Data/GDXray/
+DATASET_DIR=/home/maxkferg/Data/
 TRAIN_DIR=./logs/
 CHECKPOINT_PATH=./checkpoints/ssd_300_vgg.ckpt
 python3 train_ssd_network.py \
@@ -16,6 +16,10 @@ python3 train_ssd_network.py \
     --batch_size=32
 
 
+
+gcloud compute scp smart-city-collision:SSD-Material-Defects/logs/* . --project "smart-city-model" --zone "us-west1-b"
+
+gcloud compute scp gdxray_train_000.tfrecord smart-city-collision:~/Data . --project "smart-city-model" --zone "us-west1-b"
 
 
 

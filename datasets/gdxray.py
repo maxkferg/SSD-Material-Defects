@@ -29,15 +29,15 @@ ITEMS_TO_DESCRIPTIONS = {
 # (Images, Objects) statistics on every class.
 TRAIN_STATISTICS = {
     'none': (0, 0),
-    'defect': (238, 306),
+    'defect': (2560, 4000),
 }
 TEST_STATISTICS = {
     'none': (0, 0),
-    'defect': (1, 1),
+    'defect': (200, 400),
 }
 SPLITS_TO_SIZES = {
-    'train': 400,
-    'test': 100,
+    'train': 2560,
+    'test': 200,
 }
 SPLITS_TO_STATISTICS = {
     'train': TRAIN_STATISTICS,
