@@ -19,8 +19,7 @@ python3 train_ssd_network.py \
 
 gcloud compute scp smart-city-collision:SSD-Material-Defects/logs/* . --project "smart-city-model" --zone "us-west1-b"
 
-gcloud compute scp gdxray_train_000.tfrecord smart-city-collision:~/Data . --project "smart-city-model" --zone "us-west1-b"
-
+gcloud compute scp gdxray_train.tfrecord smart-city-collision:~ --project "smart-city-model" --zone "us-west1-b"
 
 
 # =========================================================================== #

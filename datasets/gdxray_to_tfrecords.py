@@ -66,7 +66,7 @@ DEFECT_LABEL = 1
 DEFECT_LABEL_TEXT = "defect"
 
 
-def _process_image(image):
+def _process_image(sess, image):
     """Process a image and annotation file.
 
     Args:
@@ -79,7 +79,7 @@ def _process_image(image):
     """
     # Read the image file.
     filename = image.filename
-    image_data = tf.gfile.FastGFile(filename, 'rb').read()
+    image_data = _image_to_bytes(sess, image.pixels)
 
     # Image shape.
     shape = [int(image.height),
@@ -152,7 +152,7 @@ def _convert_to_example(image_data, labels, labels_text, bboxes, shape):
     return example
 
 
-def _add_to_tfrecord(image, tfrecord_writer):
+def _add_to_tfrecord(sess, image, tfrecord_writer):
     """Loads data from image and annotations files and add them to a TFRecord.
 
     Args:
@@ -160,7 +160,7 @@ def _add_to_tfrecord(image, tfrecord_writer):
       name: Image name to add to the TFRecord;
       tfrecord_writer: The TFRecord writer to use for writing.
     """
-    image_data, shape, bboxes, labels, labels_text = _process_image(image)
+    image_data, shape, bboxes, labels, labels_text = _process_image(sess, image)
     example = _convert_to_example(image_data, labels, labels_text, bboxes, shape)
     tfrecord_writer.write(example.SerializeToString())
     _save_to_file(image, shape, bboxes)
@@ -179,8 +179,15 @@ def _save_to_file(image, shape, bboxes):
     cv.imwrite(os.path.join('pictures','test',filename), pixels)
 
 
-def _get_output_filename(output_dir, name, idx):
-    return '%s/%s_%03d.tfrecord' % (output_dir, name, idx)
+def _image_to_bytes(sess, image_data):
+    """Return the image as png encoded bytes"""
+    inputs = tf.placeholder(dtype=tf.uint8, shape=image_data.shape)
+    encoded_png = tf.image.encode_png(inputs)
+    return sess.run(encoded_png, feed_dict={inputs: image_data})
+
+
+def _get_output_filename(output_dir, name):
+    return '%s/%s.tfrecord' % (output_dir, name)
 
 
 def run(output_dir, name='gdxray_train', shuffling=False):
@@ -192,15 +199,16 @@ def run(output_dir, name='gdxray_train', shuffling=False):
     """
 
     # Process dataset files.
-    tf_filename = _get_output_filename(output_dir, name, idx=0)
+    tf_filename = _get_output_filename(output_dir, name)
     print("Writing file to", tf_filename)
     i = 0
-    with tf.python_io.TFRecordWriter(tf_filename) as tfrecord_writer:
-      for image in get_images():
-        sys.stdout.write('\r>> Converting image [%i]: %s \n'%(i, image.filename))
-        sys.stdout.flush()
-        _add_to_tfrecord(image, tfrecord_writer)
-        i += 1
+    with tf.Session() as sess:
+        with tf.python_io.TFRecordWriter(tf_filename) as tfrecord_writer:
+          for image in get_images():
+            sys.stdout.write('\r>> Converting image [%i]: %s \n'%(i, image.filename))
+            sys.stdout.flush()
+            _add_to_tfrecord(sess, image, tfrecord_writer)
+            i += 1
 
     print('\nFinished converting the GDXray Dataset!')
 
